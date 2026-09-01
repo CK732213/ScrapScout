@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080b10"><title>ScrapScout</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar"><div class="brand"><div class="logo">SS</div><div><strong>ScrapScout</strong><span>Vehicle deal finder</span></div></div><div id="health" class="status">Checking API…</div></header>
+<main class="shell">
+<section class="hero"><div><p class="eyebrow">FIND • SCORE • PROFIT</p><h1>Find cheap cars before someone else does.</h1><p class="sub">Search marketplace listings, spot low-price vehicles and estimate potential scrap return from one dashboard.</p></div><div class="hero-card"><span>Target</span><b>Buy low → recover value → profit</b></div></section>
+
+<section class="diagram"><b>How ScrapScout works</b><div class="flow">
+<div class="node"><i>1</i><b>Search</b><small>Make + price + location</small></div><em>→</em>
+<div class="node"><i>2</i><b>Fetch</b><small>Marketplace API</small></div><em>→</em>
+<div class="node"><i>3</i><b>Score</b><small>Price + distance + age</small></div><em>→</em>
+<div class="node"><i>4</i><b>Profit</b><small>Scrap + cats − costs</small></div>
+</div></section>
+
+<section class="card"><div class="head"><div><p class="eyebrow">LIVE SEARCH</p><h2>Search listings</h2></div><label class="source"><span>Source</span><select id="source"><option value="facebook">Facebook Marketplace</option><option value="gumtree">Gumtree</option></select></label></div>
+<form id="form" class="grid">
+<label><span>Make / model</span><input id="q" value="BMW"></label>
+<label><span>Maximum price (£)</span><input id="price" type="number" value="500" min="0"></label>
+<label><span>Location</span><input id="location" value="Liverpool"></label>
+<label><span>Radius</span><select id="radius"><option>10</option><option>25</option><option>50</option><option>100</option></select></label>
+<button class="primary">Search now</button>
+</form><div id="error" class="error hidden"></div><div id="loading" class="loading hidden">Searching…</div></section>
+
+<section><div class="head"><div><p class="eyebrow">RESULTS</p><h2 id="title">Ready to search</h2></div><div id="count" class="muted">0 listings</div></div><div id="results" class="results"></div></section>
+
+<section class="card calc"><p class="eyebrow">QUICK PROFIT CALCULATOR</p><h2>Estimate a deal</h2>
+<div class="calc-grid"><label>Buy price (£)<input id="buy" type="number" value="300"></label><label>Scrap return (£)<input id="scrap" type="number" value="350"></label><label>Catalysts (£)<input id="cats" type="number" value="250"></label><label>Other costs (£)<input id="costs" type="number" value="50"></label></div>
+<div class="profit"><span>Estimated profit</span><strong id="profit">£250</strong></div></section>
+</main><footer>ScrapScout • API keys stay on the server • Never commit .env</footer>
+<script src="/app.js"></script>
+</body></html>
