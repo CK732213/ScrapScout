@@ -4,132 +4,285 @@ const express = require("express");
 const path = require("path");
 
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Serve the ScrapScout website
+// Serve ScrapScout website
 app.use(express.static(path.join(__dirname, "public")));
 
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function cleanNumber(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^0-9.-]/g, "");
+    if (!cleaned) return null;
+
+    const number = Number(cleaned);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  return null;
+}
+
+
+function getPrice(item) {
+
+  // CaptAPI normally provides priceAmount in minor units
+  if (typeof item?.priceAmount === "number") {
+    return item.priceAmount / 100;
+  }
+
+  // Sometimes price itself is already a number
+  if (typeof item?.price === "number") {
+    return item.price;
+  }
+
+  // Price may be a formatted string
+  if (typeof item?.price === "string") {
+    return cleanNumber(item.price);
+  }
+
+  // Handle price object
+  if (item?.price && typeof item.price === "object") {
+
+    const objectPrice =
+      item.price.amount ??
+      item.price.value ??
+      item.price.price ??
+      null;
+
+    return cleanNumber(objectPrice);
+  }
+
+  // Other possible API formats
+  if (item?.amount !== undefined) {
+    return cleanNumber(item.amount);
+  }
+
+  return null;
+}
+
+
 function normalize(item, source) {
-  const price =
-    item?.priceAmount ??
-    item?.price ??
-    item?.amount ??
+
+  const price = getPrice(item);
+
+  const location =
+    item?.location?.city ||
+    item?.location?.name ||
+    item?.city ||
+    item?.location ||
+    "";
+
+  const image =
+    item?.image ||
+    item?.imageUrl ||
+    item?.thumbnail ||
+    item?.photos?.[0] ||
     null;
 
+  const title =
+    item?.title ||
+    item?.name ||
+    "Untitled listing";
+
+  const url =
+    item?.url ||
+    item?.listingUrl ||
+    item?.link ||
+    null;
+
+  const id =
+    item?.id ||
+    item?.listingId ||
+    `${source}-${title}-${location}`;
+
+
   return {
-    id:
-      item?.id ??
-      item?.listingId ??
-      `${source}-${item?.title ?? "listing"}`,
+
+    id,
 
     source,
 
-    title:
-      item?.title ??
-      item?.name ??
-      "Untitled listing",
+    title,
 
-    price:
-      typeof price === "string"
-        ? price
-        : price == null
-          ? "POA"
-          : `£${price}`,
+    price,
 
-    priceAmount: Number(price) || null,
+    priceFormatted:
+      price !== null
+        ? `£${price.toLocaleString("en-GB", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+          })}`
+        : "Price unavailable",
 
-    location:
-      item?.location?.name ??
-      item?.location ??
-      "",
+    location,
 
-    url:
-      item?.url ??
-      item?.listingUrl ??
-      item?.link ??
-      "#",
+    image,
 
-    image:
-      item?.image ??
-      item?.thumbnail ??
-      item?.photos?.[0] ??
-      null,
+    url,
+
+    description:
+      item?.description || "",
 
     condition:
-      item?.condition ??
-      "",
+      item?.condition || "",
 
     createdAt:
-      item?.createdAt ??
-      item?.publishedAt ??
-      null
+      item?.createdAt || null,
+
+    status:
+      item?.status || "available",
+
+    isSold:
+      Boolean(item?.isSold),
+
+    isLocal:
+      item?.isLocal ?? null,
+
+    shipsOutsideRadius:
+      item?.shipsOutsideRadius ?? null
   };
 }
 
 
-// FACEBOOK MARKETPLACE
-async function facebookSearch(args) {
+/* =========================================================
+   CAPTAPI REQUEST
+========================================================= */
 
-  if (!process.env.CAPTAPI_API_KEY) {
+async function captapiRequest(url) {
+
+  const apiKey =
+    process.env.CAPTAPI_API_KEY;
+
+  if (!apiKey) {
+
     const error = new Error(
-      "CAPTAPI_API_KEY is not configured on the server."
+      "CAPTAPI_API_KEY is not configured on Render."
     );
 
     error.status = 500;
+
     throw error;
   }
 
-  const base =
-    process.env.CAPTAPI_BASE_URL ||
-    "https://api.captapi.com";
-
-  const route =
-    process.env.CAPTAPI_MARKETPLACE_PATH ||
-    "/v1/facebook/marketplace-search";
-
-  const url = new URL(route, base);
-
-  url.searchParams.set("q", args.q);
-  url.searchParams.set("location", args.location);
-
-  if (args.maxPrice) {
-    url.searchParams.set("maxPrice", args.maxPrice);
-  }
-
-  if (args.radius) {
-    url.searchParams.set("radius", args.radius);
-  }
-
-  if (args.cache) {
-    url.searchParams.set("cache", "true");
-  }
 
   const response = await fetch(url, {
-    headers: {
-      Authorization:
-        `Bearer ${process.env.CAPTAPI_API_KEY}`,
 
-      Accept: "application/json"
+    method: "GET",
+
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Accept": "application/json"
     }
   });
 
-  const body =
-    await response.json().catch(() => ({}));
+
+  const text = await response.text();
+
+  let body;
+
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = {
+      raw: text
+    };
+  }
+
 
   if (!response.ok) {
 
-    const error = new Error(
+    const message =
       body?.message ||
       body?.error ||
-      body?.code ||
-      `CaptAPI returned HTTP ${response.status}`
-    );
+      body?.detail ||
+      `CaptAPI returned HTTP ${response.status}`;
+
+    const error = new Error(message);
 
     error.status = response.status;
+
     throw error;
   }
+
+
+  return body;
+}
+
+
+/* =========================================================
+   FACEBOOK MARKETPLACE
+========================================================= */
+
+async function facebookSearch(args) {
+
+  const params =
+    new URLSearchParams();
+
+
+  params.set("q", args.q);
+
+  params.set(
+    "location",
+    args.location
+  );
+
+  // Keep results reasonably sized
+  params.set("limit", "50");
+
+  // Local vehicle hunting
+  params.set(
+    "deliveryMethod",
+    "local_pickup"
+  );
+
+  if (args.maxPrice) {
+
+    params.set(
+      "maxPrice",
+      args.maxPrice
+    );
+  }
+
+  if (args.radius) {
+
+    params.set(
+      "radiusMiles",
+      args.radius
+    );
+  }
+
+  // Cache can save CaptAPI credits
+  if (args.cache) {
+
+    params.set(
+      "cache",
+      "true"
+    );
+  }
+
+
+  const url =
+    `https://api.captapi.com/v1/facebook/marketplace-search?${params.toString()}`;
+
+
+  const body =
+    await captapiRequest(url);
+
 
   const raw =
     body?.data?.items ??
@@ -138,216 +291,89 @@ async function facebookSearch(args) {
     body?.listings ??
     [];
 
+
+  const listings =
+    Array.isArray(raw)
+      ? raw.map(item =>
+          normalize(item, "Facebook Marketplace")
+        )
+      : [];
+
+
   return {
 
-    listings:
-      Array.isArray(raw)
-        ? raw.map(item =>
-            normalize(
-              item,
-              "Facebook Marketplace"
-            )
-          )
-        : [],
+    listings,
 
     meta: {
+
       totalReturned:
         body?.data?.totalReturned ??
-        body?.totalReturned ??
-        null,
+        listings.length,
 
       hasMore:
         body?.data?.hasMore ??
-        body?.hasMore ??
         false,
 
       nextCursor:
         body?.data?.nextCursor ??
-        body?.nextCursor ??
         null
     }
   };
 }
 
 
-// GUMTREE
+/* =========================================================
+   GUMTREE
+========================================================= */
+
 async function gumtreeSearch(args) {
 
-  if (!process.env.GUMTREE_API_URL) {
+  const apiUrl =
+    process.env.GUMTREE_API_URL;
 
-    return {
-      listings: [],
 
-      meta: {
-        totalReturned: 0,
-        hasMore: false
-      },
+  if (!apiUrl) {
 
-      message:
-        "Gumtree API/provider is not configured yet."
-    };
+    const error = new Error(
+      "Gumtree API is not configured yet."
+    );
+
+    error.status = 503;
+
+    throw error;
   }
 
-  const url =
-    new URL(process.env.GUMTREE_API_URL);
 
-  url.searchParams.set("q", args.q);
-  url.searchParams.set("location", args.location);
+  const params =
+    new URLSearchParams();
+
+  params.set("q", args.q);
+  params.set("location", args.location);
+
 
   if (args.maxPrice) {
-    url.searchParams.set(
+    params.set(
       "maxPrice",
       args.maxPrice
     );
   }
 
+
   if (args.radius) {
-    url.searchParams.set(
+    params.set(
       "radius",
       args.radius
     );
   }
 
+
+  const url =
+    `${apiUrl}?${params.toString()}`;
+
+
   const headers = {
-    Accept: "application/json"
+    "Accept": "application/json"
   };
 
-  if (process.env.GUMTREE_API_KEY) {
-    headers.Authorization =
-      `Bearer ${process.env.GUMTREE_API_KEY}`;
-  }
 
-  const response =
-    await fetch(url, { headers });
-
-  const body =
-    await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-
-    const error = new Error(
-      body?.message ||
-      `Gumtree provider returned HTTP ${response.status}`
-    );
-
-    error.status = response.status;
-    throw error;
-  }
-
-  const raw =
-    body?.data?.items ??
-    body?.items ??
-    body?.listings ??
-    [];
-
-  return {
-
-    listings:
-      Array.isArray(raw)
-        ? raw.map(item =>
-            normalize(item, "Gumtree")
-          )
-        : [],
-
-    meta: {
-      totalReturned: raw.length,
-      hasMore: false
-    }
-  };
-}
-
-
-// HEALTH CHECK
-app.get("/api/health", (_req, res) => {
-
-  res.json({
-    ok: true,
-    service: "ScrapScout",
-
-    captapiConfigured:
-      Boolean(process.env.CAPTAPI_API_KEY),
-
-    gumtreeConfigured:
-      Boolean(process.env.GUMTREE_API_URL)
-  });
-});
-
-
-// SEARCH
-app.get("/api/search", async (req, res) => {
-
-  try {
-
-    const args = {
-
-      q:
-        String(
-          req.query.q || "BMW"
-        ).trim(),
-
-      location:
-        String(
-          req.query.location ||
-          "Liverpool"
-        ).trim(),
-
-      maxPrice:
-        String(
-          req.query.maxPrice || ""
-        ),
-
-      radius:
-        String(
-          req.query.radius || "10"
-        ),
-
-      cache:
-        req.query.cache === "true"
-    };
-
-    if (!args.q || !args.location) {
-
-      return res.status(400).json({
-        ok: false,
-        message:
-          "Make/model and location are required."
-      });
-    }
-
-    const result =
-      req.query.source === "gumtree"
-        ? await gumtreeSearch(args)
-        : await facebookSearch(args);
-
-    res.json({
-      ok: true,
-      query: args,
-      ...result
-    });
-
-  } catch (error) {
-
-    console.error(error);
-
-    res.status(
-      error.status || 500
-    ).json({
-
-      ok: false,
-
-      message:
-        error.message ||
-        "Search failed."
-    });
-  }
-});
-
-
-// START SERVER
-app.listen(PORT, () => {
-
-  console.log(
-    `ScrapScout running on port ${PORT}`
-  );
-
-});
+  if (process.env.GUMTREE
