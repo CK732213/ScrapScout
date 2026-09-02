@@ -4,70 +4,123 @@ const express = require("express");
 const path = require("path");
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-
-// Serve the ScrapScout website
 app.use(express.static(path.join(__dirname, "public")));
 
 
-// =====================================================
-// HELPERS
-// =====================================================
+/* =====================================================
+   PRICE
+===================================================== */
 
-function cleanPrice(value) {
+function getPrice(item) {
+  const value =
+    item?.price ??
+    item?.priceAmount ??
+    item?.amount ??
+    null;
+
   if (value === null || value === undefined) {
     return null;
   }
 
-  // Number
   if (typeof value === "number") {
-    // CaptAPI priceAmount is normally minor units
-    if (Number.isInteger(value) && value > 1000) {
+    // CaptAPI priceAmount is minor units
+    if (item?.priceAmount !== undefined && item?.price === undefined) {
       return value / 100;
     }
 
     return value;
   }
 
-  // Object
+  if (typeof value === "string") {
+    const cleaned = value
+      .replace(/,/g, "")
+      .replace(/[£$€]/g, "")
+      .trim();
+
+    const number = Number(cleaned);
+
+    return Number.isFinite(number) ? number : null;
+  }
+
   if (typeof value === "object") {
-    return cleanPrice(
+    const nested =
       value.amount ??
       value.value ??
       value.price ??
       value.display ??
-      null
-    );
-  }
+      null;
 
-  // String
-  if (typeof value === "string") {
-    const match = value.replace(/,/g, "").match(
-      /(\d+(?:\.\d{1,2})?)/
-    );
-
-    if (!match) {
-      return null;
-    }
-
-    return Number(match[1]);
+    return getPrice({
+      price: nested
+    });
   }
 
   return null;
 }
 
 
+/* =====================================================
+   LOCATION
+===================================================== */
+
+function getLocation(item) {
+  const location = item?.location;
+
+  if (typeof location === "string") {
+    return location;
+  }
+
+  if (location && typeof location === "object") {
+    return (
+      location.name ??
+      location.city ??
+      location.town ??
+      location.address ??
+      location.postcode ??
+      location.formatted ??
+      location.displayName ??
+      ""
+    );
+  }
+
+  return (
+    item?.locationName ??
+    item?.city ??
+    item?.town ??
+    item?.postcode ??
+    ""
+  );
+}
+
+
+/* =====================================================
+   GOOGLE MAPS
+===================================================== */
+
+function createGoogleMapsUrl(location) {
+  if (!location) {
+    return null;
+  }
+
+  return (
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent(location)
+  );
+}
+
+
+/* =====================================================
+   NORMALISE LISTING
+===================================================== */
+
 function normalize(item, source) {
 
-  const price =
-    item?.price ??
-    item?.priceFormatted ??
-    cleanPrice(item?.priceAmount) ??
-    cleanPrice(item?.amount) ??
-    null;
+  const price = getPrice(item);
+
+  const location = getLocation(item);
 
   const title =
     item?.title ??
@@ -75,19 +128,15 @@ function normalize(item, source) {
     item?.headline ??
     "Untitled listing";
 
-  const id =
-    item?.id ??
-    item?.listingId ??
-    item?.listing_id ??
-    `${source}-${title}`;
-
   const image =
     item?.image ??
     item?.imageUrl ??
     item?.imageURL ??
     item?.thumbnail ??
     item?.photos?.[0]?.url ??
+    item?.photos?.[0] ??
     item?.images?.[0]?.url ??
+    item?.images?.[0] ??
     null;
 
   const url =
@@ -97,27 +146,41 @@ function normalize(item, source) {
     item?.listingURL ??
     null;
 
-  const location =
-    item?.location ??
-    item?.locationName ??
-    item?.city ??
-    "";
+  const id =
+    item?.id ??
+    item?.listingId ??
+    item?.listing_id ??
+    `${source}-${title}`;
 
   return {
     id,
     source,
     title,
     price,
+    priceFormatted:
+      price !== null
+        ? `£${price.toLocaleString("en-GB", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+          })}`
+        : "POA",
+    location,
+    mapsUrl: createGoogleMapsUrl(location),
     image,
     url,
-    location
+    condition: item?.condition ?? "",
+    description: item?.description ?? "",
+    createdAt:
+      item?.createdAt ??
+      item?.publishedAt ??
+      null
   };
 }
 
 
-// =====================================================
-// CAPTAPI REQUEST
-// =====================================================
+/* =====================================================
+   CAPTAPI REQUEST
+===================================================== */
 
 async function captapiRequest(url) {
 
@@ -129,7 +192,6 @@ async function captapiRequest(url) {
     );
 
     error.status = 500;
-
     throw error;
   }
 
@@ -137,9 +199,9 @@ async function captapiRequest(url) {
     method: "GET",
 
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "x-api-key": apiKey,
-      "Accept": "application/json"
+      Accept: "application/json"
     }
   });
 
@@ -178,9 +240,9 @@ async function captapiRequest(url) {
 }
 
 
-// =====================================================
-// FACEBOOK MARKETPLACE
-// =====================================================
+/* =====================================================
+   FACEBOOK MARKETPLACE
+===================================================== */
 
 async function facebookSearch(args) {
 
@@ -197,7 +259,11 @@ async function facebookSearch(args) {
   const url =
     `https://api.captapi.com/v1/facebook/marketplace-search?${params.toString()}`;
 
-  console.log("Facebook search:", url);
+  console.log(
+    "Facebook Marketplace search:",
+    args.q,
+    args.location
+  );
 
   const body = await captapiRequest(url);
 
@@ -208,17 +274,38 @@ async function facebookSearch(args) {
     body?.listings ??
     [];
 
-  const listings = Array.isArray(raw)
+  let listings = Array.isArray(raw)
     ? raw.map(item =>
         normalize(item, "Facebook Marketplace")
       )
     : [];
+
+
+  // Extra protection for the maximum price
+  if (args.maxPrice) {
+
+    const maximum =
+      Number(args.maxPrice);
+
+    if (
+      Number.isFinite(maximum)
+    ) {
+
+      listings = listings.filter(
+        listing =>
+          listing.price === null ||
+          listing.price <= maximum
+      );
+    }
+  }
+
 
   return {
     listings,
 
     meta: {
       totalReturned: listings.length,
+
       hasMore:
         Boolean(
           body?.data?.hasMore ??
@@ -230,18 +317,19 @@ async function facebookSearch(args) {
 }
 
 
-// =====================================================
-// GUMTREE
-// =====================================================
+/* =====================================================
+   GUMTREE
+===================================================== */
 
 async function gumtreeSearch(args) {
 
-  const apiUrl = process.env.GUMTREE_API_URL;
+  const apiUrl =
+    process.env.GUMTREE_API_URL;
 
   if (!apiUrl) {
 
     const error = new Error(
-      "Gumtree API is not configured yet. Add GUMTREE_API_URL in Render."
+      "Gumtree API is not configured yet."
     );
 
     error.status = 503;
@@ -249,31 +337,45 @@ async function gumtreeSearch(args) {
     throw error;
   }
 
-  const params = new URLSearchParams();
+  const params =
+    new URLSearchParams();
 
   params.set("q", args.q);
   params.set("location", args.location);
   params.set("radiusMiles", args.radius);
 
   if (args.maxPrice) {
-    params.set("maxPrice", args.maxPrice);
+    params.set(
+      "maxPrice",
+      args.maxPrice
+    );
   }
 
   const separator =
-    apiUrl.includes("?") ? "&" : "?";
+    apiUrl.includes("?")
+      ? "&"
+      : "?";
 
   const url =
     `${apiUrl}${separator}${params.toString()}`;
 
-  console.log("Gumtree search:", url);
+  const headers = {
+    Accept: "application/json"
+  };
 
-  const response = await fetch(url, {
-    headers: {
-      "Accept": "application/json"
-    }
-  });
+  if (process.env.GUMTREE_API_KEY) {
+    headers.Authorization =
+      `Bearer ${process.env.GUMTREE_API_KEY}`;
+  }
 
-  const text = await response.text();
+  const response =
+    await fetch(url, {
+      method: "GET",
+      headers
+    });
+
+  const text =
+    await response.text();
 
   let body;
 
@@ -310,11 +412,12 @@ async function gumtreeSearch(args) {
     body?.listings ??
     [];
 
-  const listings = Array.isArray(raw)
-    ? raw.map(item =>
-        normalize(item, "Gumtree")
-      )
-    : [];
+  const listings =
+    Array.isArray(raw)
+      ? raw.map(item =>
+          normalize(item, "Gumtree")
+        )
+      : [];
 
   return {
     listings,
@@ -327,134 +430,146 @@ async function gumtreeSearch(args) {
 }
 
 
-// =====================================================
-// HEALTH CHECK
-// =====================================================
+/* =====================================================
+   HEALTH CHECK
+===================================================== */
 
-app.get("/api/health", (_req, res) => {
-
-  res.json({
-    ok: true,
-    service: "ScrapScout",
-
-    captapiConfigured:
-      Boolean(process.env.CAPTAPI_API_KEY),
-
-    gumtreeConfigured:
-      Boolean(process.env.GUMTREE_API_URL)
-  });
-});
-
-
-// =====================================================
-// SEARCH
-// =====================================================
-
-app.get("/api/search", async (req, res) => {
-
-  try {
-
-    const args = {
-
-      q:
-        String(
-          req.query.q || "BMW"
-        ).trim(),
-
-      location:
-        String(
-          req.query.location ||
-          "Liverpool"
-        ).trim(),
-
-      maxPrice:
-        String(
-          req.query.maxPrice || ""
-        ).trim(),
-
-      radius:
-        String(
-          req.query.radius || "10"
-        ).trim(),
-
-      cache:
-        req.query.cache === "true"
-    };
-
-
-    if (!args.q || !args.location) {
-
-      return res.status(400).json({
-        ok: false,
-        message:
-          "Make/model and location are required."
-      });
-    }
-
-
-    const source =
-      String(
-        req.query.source || "facebook"
-      ).toLowerCase();
-
-
-    let result;
-
-
-    if (source === "gumtree") {
-
-      result =
-        await gumtreeSearch(args);
-
-    } else {
-
-      result =
-        await facebookSearch(args);
-    }
-
+app.get(
+  "/api/health",
+  (_req, res) => {
 
     res.json({
 
       ok: true,
 
-      query: args,
+      service:
+        "ScrapScout",
 
-      source,
+      captapiConfigured:
+        Boolean(
+          process.env.CAPTAPI_API_KEY
+        ),
 
-      ...result
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "SEARCH ERROR:",
-      error
-    );
-
-
-    res.status(
-      error.status || 500
-    ).json({
-
-      ok: false,
-
-      message:
-        error.message ||
-        "Search failed."
+      gumtreeConfigured:
+        Boolean(
+          process.env.GUMTREE_API_URL
+        )
     });
   }
-});
+);
 
 
-// =====================================================
-// START SERVER
-// =====================================================
+/* =====================================================
+   SEARCH
+===================================================== */
 
-app.listen(PORT, () => {
+app.get(
+  "/api/search",
+  async (req, res) => {
 
-  console.log(
-    `ScrapScout running on port ${PORT}`
-  );
+    try {
 
-});
+      const args = {
+
+        q:
+          String(
+            req.query.q ||
+            "BMW"
+          ).trim(),
+
+        location:
+          String(
+            req.query.location ||
+            "Liverpool"
+          ).trim(),
+
+        maxPrice:
+          String(
+            req.query.maxPrice ||
+            ""
+          ).trim(),
+
+        radius:
+          String(
+            req.query.radius ||
+            "10"
+          ).trim()
+      };
+
+
+      if (
+        !args.q ||
+        !args.location
+      ) {
+
+        return res.status(400).json({
+
+          ok: false,
+
+          message:
+            "Make/model and location are required."
+        });
+      }
+
+
+      const source =
+        String(
+          req.query.source ||
+          "facebook"
+        ).toLowerCase();
+
+
+      const result =
+        source === "gumtree"
+          ? await gumtreeSearch(args)
+          : await facebookSearch(args);
+
+
+      res.json({
+
+        ok: true,
+
+        query: args,
+
+        source,
+
+        ...result
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "SEARCH ERROR:",
+        error
+      );
+
+
+      res.status(
+        error.status || 500
+      ).json({
+
+        ok: false,
+
+        message:
+          error.message ||
+          "Search failed."
+      });
+    }
+  }
+);
+
+
+/* =====================================================
+   START SERVER
+===================================================== */
+
+app.listen(
+  PORT,
+  () => {
+
+    console.log(
+      `ScrapScout running on port ${PORT}`
+    );
+  }
+);
