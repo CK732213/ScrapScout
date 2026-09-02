@@ -1,1 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <title>ScrapScout</title>
+
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+  <header>
+    <div class="container">
+      <div class="logo">
+        Scrap<span>Scout</span>
+      </div>
+
+      <div class="subtitle">
+        Find undervalued vehicles and marketplace listings.
+      </div>
+    </div>
+  </header>
+
+
+  <main class="container">
+
+    <section class="search-panel">
+
+      <form id="searchForm" class="search-form">
+
+        <input
+          id="q"
+          type="text"
+          placeholder="Make / model e.g. BMW 320d"
+          value="BMW"
+        >
+
+        <input
+          id="location"
+          type="text"
+          placeholder="Location"
+          value="Liverpool"
+        >
+
+        <input
+          id="maxPrice"
+          type="number"
+          placeholder="Max price £"
+        >
+
+        <input
+          id="radius"
+          type="number"
+          placeholder="Radius miles"
+          value="10"
+        >
+
+        <select id="source">
+          <option value="facebook">Facebook Marketplace</option>
+          <option value="gumtree">Gumtree</option>
+        </select>
+
+        <button id="searchButton" type="submit">
+          Search
+        </button>
+
+      </form>
+
+      <div class="status">
+        <span id="health">Checking server...</span>
+        <span> · </span>
+        <span id="status">Ready to search</span>
+      </div>
+
+    </section>
+
+
+    <!--
+      SCRAPSCOUT SEARCH FLOW
+
+      ┌─────────────────────┐
+      │   SEARCH CRITERIA   │
+      │ Make / Location / £  │
+      └──────────┬──────────┘
+                 │
+                 ▼
+      ┌─────────────────────┐
+      │   MARKETPLACE API   │
+      │ Facebook / Gumtree  │
+      └──────────┬──────────┘
+                 │
+                 ▼
+      ┌─────────────────────┐
+      │ NORMALISE LISTINGS  │
+      │ Price / URL / Image │
+      └──────────┬──────────┘
+                 │
+                 ▼
+      ┌─────────────────────┐
+      │   SCRAP VALUE /     │
+      │   PROFIT ANALYSIS   │
+      └──────────┬──────────┘
+                 │
+                 ▼
+      ┌─────────────────────┐
+      │    OPPORTUNITIES    │
+      │  Cheapest / Best    │
+      └─────────────────────┘
+    -->
+
+
+    <section id="results" class="results">
+
+      <div class="empty">
+        <h3>ScrapScout is ready</h3>
+        <p>
+          Enter a vehicle and location above, then press Search.
+        </p>
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <footer>
+    <div class="container">
+      ScrapScout · Marketplace vehicle finder
+    </div>
+  </footer>
+
+
+  <script src="/app.js"></script>
+
+</body>
+</html>
