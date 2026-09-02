@@ -3,9 +3,7 @@ const $ = (id) => document.getElementById(id);
 const money = (value) => {
   const n = Number(value);
 
-  if (!Number.isFinite(n)) {
-    return "POA";
-  }
+  if (!Number.isFinite(n)) return "POA";
 
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -13,7 +11,6 @@ const money = (value) => {
     maximumFractionDigits: 0
   }).format(n);
 };
-
 
 const esc = (value) =>
   String(value ?? "")
@@ -25,42 +22,62 @@ const esc = (value) =>
 
 
 /* =====================================================
-   OPEN LISTING
+   FACEBOOK APP / LISTING
 ===================================================== */
 
-function openListing(url, source) {
+function openFacebookListing(url, listingId) {
 
   if (!url || url === "#") {
     return;
   }
 
-  // Facebook listing
-  if (
-    source &&
-    source.toLowerCase().includes("facebook")
-  ) {
+  /*
+   * If CaptAPI gives us a Facebook listing ID,
+   * try opening that exact Marketplace listing
+   * inside the Facebook Android app.
+   */
+
+  if (listingId) {
+
+    const appUrl =
+      `fb://marketplace/item/${encodeURIComponent(listingId)}`;
+
+    window.location.href = appUrl;
 
     /*
-      Try the normal Facebook URL first.
+     * If Facebook doesn't open, return to the
+     * normal Facebook web listing after a short delay.
+     */
 
-      Android can automatically hand the URL
-      to the Facebook app when Facebook is installed.
-
-      If Android doesn't have an app association,
-      the normal Facebook website opens instead.
-    */
-
-    window.location.href = url;
+    setTimeout(() => {
+      window.location.href = url;
+    }, 1200);
 
     return;
   }
 
-  // Gumtree / other sources
-  window.open(
-    url,
-    "_blank",
-    "noopener,noreferrer"
-  );
+  /*
+   * No listing ID available.
+   *
+   * Try Facebook's app URL first.
+   */
+
+  const cleanUrl =
+    url.replace(/^https?:\/\//i, "");
+
+  const facebookAppUrl =
+    `fb://${cleanUrl}`;
+
+  window.location.href =
+    facebookAppUrl;
+
+  /*
+   * Browser fallback.
+   */
+
+  setTimeout(() => {
+    window.location.href = url;
+  }, 1200);
 }
 
 
@@ -267,25 +284,62 @@ function renderCard(item) {
     "#";
 
 
+  const listingId =
+    item.id ||
+    item.listingId ||
+    "";
+
+
   const isFacebook =
     source
       .toLowerCase()
       .includes("facebook");
 
 
-  const mapsButton =
-    item.mapsUrl
-      ? `
-        <a
-          class="maps-button"
-          href="${esc(item.mapsUrl)}"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          📍 Open in Google Maps
-        </a>
-      `
-      : "";
+  let buttons = "";
+
+
+  if (isFacebook) {
+
+    buttons += `
+      <button
+        class="view-listing"
+        type="button"
+        data-facebook-url="${esc(listingUrl)}"
+        data-listing-id="${esc(listingId)}"
+      >
+        📱 Open in Facebook
+      </button>
+    `;
+
+  } else if (listingUrl !== "#") {
+
+    buttons += `
+      <a
+        class="view-listing"
+        href="${esc(listingUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        View Listing
+      </a>
+    `;
+  }
+
+
+  if (item.mapsUrl) {
+
+    buttons += `
+      <a
+        class="maps-button"
+        href="${esc(item.mapsUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        📍 Google Maps
+      </a>
+    `;
+  }
 
 
   return `
@@ -340,34 +394,7 @@ function renderCard(item) {
 
 
         <div class="listing-buttons">
-
-          ${
-            isFacebook
-              ? `
-                <button
-                  class="view-listing"
-                  type="button"
-                  data-url="${esc(listingUrl)}"
-                  data-source="${esc(source)}"
-                >
-                  Open Facebook Listing
-                </button>
-              `
-              : `
-                <a
-                  class="view-listing"
-                  href="${esc(listingUrl)}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View Listing
-                </a>
-              `
-          }
-
-
-          ${mapsButton}
-
+          ${buttons}
         </div>
 
       </div>
@@ -378,7 +405,7 @@ function renderCard(item) {
 
 
 /* =====================================================
-   LISTING BUTTON CLICKS
+   BUTTON HANDLER
 ===================================================== */
 
 document.addEventListener(
@@ -387,7 +414,7 @@ document.addEventListener(
 
     const button =
       event.target.closest(
-        ".view-listing"
+        "[data-facebook-url]"
       );
 
 
@@ -396,20 +423,21 @@ document.addEventListener(
     }
 
 
+    event.preventDefault();
+
+
     const url =
-      button.dataset.url;
+      button.dataset.facebookUrl;
 
 
-    const source =
-      button.dataset.source;
+    const listingId =
+      button.dataset.listingId;
 
 
-    if (url) {
-      openListing(
-        url,
-        source
-      );
-    }
+    openFacebookListing(
+      url,
+      listingId
+    );
   }
 );
 
