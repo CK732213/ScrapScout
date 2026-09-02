@@ -1,1 +1,194 @@
+* {
+  box-sizing: border-box;
+}
 
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0b0f14;
+  color: #f5f7fa;
+}
+
+.container {
+  width: min(1100px, 94%);
+  margin: 0 auto;
+}
+
+header {
+  padding: 28px 0;
+  border-bottom: 1px solid #252c35;
+}
+
+.logo {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.logo span {
+  color: #4ade80;
+}
+
+.subtitle {
+  color: #9ca3af;
+  margin-top: 6px;
+}
+
+.search-panel {
+  margin: 28px 0;
+  padding: 22px;
+  background: #121821;
+  border: 1px solid #29313c;
+  border-radius: 16px;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 1fr auto;
+  gap: 10px;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 9px;
+  border: 1px solid #343d49;
+  background: #0d131b;
+  color: #fff;
+  font-size: 15px;
+}
+
+button {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #07110a;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.status {
+  margin-top: 14px;
+  color: #9ca3af;
+}
+
+#health {
+  color: #4ade80;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  padding-bottom: 40px;
+}
+
+.listing-card {
+  overflow: hidden;
+  background: #121821;
+  border: 1px solid #29313c;
+  border-radius: 15px;
+}
+
+.listing-image {
+  height: 190px;
+  background: #1a222d;
+}
+
+.listing-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.no-image {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #687384;
+}
+
+.listing-content {
+  padding: 17px;
+}
+
+.listing-source {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #60a5fa;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.listing-content h3 {
+  margin: 0 0 10px;
+  font-size: 19px;
+}
+
+.listing-price {
+  font-size: 24px;
+  font-weight: 800;
+  color: #4ade80;
+  margin-bottom: 10px;
+}
+
+.listing-location,
+.listing-condition {
+  color: #aab3bf;
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.view-listing {
+  display: block;
+  margin-top: 15px;
+  padding: 11px;
+  text-align: center;
+  border-radius: 8px;
+  background: #263140;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.empty,
+.error {
+  padding: 30px;
+  text-align: center;
+  background: #121821;
+  border: 1px solid #29313c;
+  border-radius: 15px;
+  grid-column: 1 / -1;
+}
+
+.error {
+  border-color: #7f1d1d;
+}
+
+footer {
+  padding: 25px 0;
+  border-top: 1px solid #252c35;
+  color: #687384;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .search-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .logo {
+    font-size: 25px;
+  }
+}
